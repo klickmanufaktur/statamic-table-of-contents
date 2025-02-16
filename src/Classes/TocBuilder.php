@@ -55,51 +55,46 @@ class TocBuilder
             return '';
         }
 
-        $ordered = $this->ordered;
-
+        $ordered    = $this->ordered;
         $startLevel = $headings->pluck('level')->min();
-        $prev = $startLevel;
+        $listTag    = $ordered ? 'ol' : 'ul';
 
-        $listTag = $ordered ? 'ol' : 'ul';
-
-        // ------------------------------------------------------------------
-        // Build the table of contents as an ordered list
-        // ------------------------------------------------------------------
-
-        $toc = "<$listTag>";
+        $toc       = '';
+        // Wir starten eine Ebene unterhalb der tiefsten Überschrift,
+        // damit sich der Schleifenmechanismus vereinfacht.
+        $prevLevel = $startLevel - 1;
 
         foreach ($headings as $heading) {
-            $level = Arr::get($heading, 'level');
-            $text = Arr::get($heading, 'text');
+            $currentLevel = Arr::get($heading, 'level');
+
+            if ($currentLevel > $prevLevel) {
+                // Bei steigendem Level öffnen wir so viele Listen, wie nötig.
+                for ($i = $prevLevel + 1; $i <= $currentLevel; $i++) {
+                    $toc .= "<$listTag>";
+                }
+            } elseif ($currentLevel < $prevLevel) {
+                // Bei abfallendem Level schließen wir zuerst das letzte Listenelement
+                // und dann so viele verschachtelte Listen, wie nötig.
+                for ($i = $prevLevel; $i > $currentLevel; $i--) {
+                    $toc .= "</li></$listTag>";
+                }
+                $toc .= "</li>";
+            } else {
+                // Gleiche Ebene: Schließe das vorherige LI.
+                $toc .= "</li>";
+            }
+
             $slug = Arr::get($heading, 'slug');
+            $text = Arr::get($heading, 'text');
+            $toc .= '<li><a href="#' . $slug . '">' . $text . '</a>';
 
-            // Calculate depth change
-            $depthChange = $level - $prev;
-
-            // Close the previous list(s) if the current heading is of a lower level
-            if ($depthChange < 0) {
-                $toc .= str_repeat("</$listTag>", abs($depthChange));
-            }
-
-            // Open a new list(s) if the current heading is of a higher level
-            if ($depthChange > 0) {
-                $toc .= str_repeat("<$listTag>", $depthChange);
-            }
-
-            // Add the current heading to the list
-            $toc .= '<li><a href="#'.$slug.'">'.$text.'</a></li>';
-
-            // Update the previous level
-            $prev = $level;
+            $prevLevel = $currentLevel;
         }
 
-        // Close all remaining open lists
-        while ($prev >= $startLevel) {
-            $toc .= "</$listTag>";
-            $prev--;
+        // Schließe alle noch offenen LI-Elemente und Listen
+        for ($i = $prevLevel; $i >= $startLevel; $i--) {
+            $toc .= "</li></$listTag>";
         }
-
-        // ------------------------------------------------------------------
 
         return $toc;
     }
